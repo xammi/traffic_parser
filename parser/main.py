@@ -41,7 +41,22 @@ BYTE_ORDER = {
 }
 
 
-class PCapGlobalHeaderParser:
+class SecondMethodInvoke(Exception):
+    def __init__(self):
+        super(SecondMethodInvoke, self).__init__('Method must be called once')
+
+
+class Parser:
+    parse_was_invoke = False
+
+    def parse(self):
+        if not self.parse_was_invoke:
+            self.parse_was_invoke = True
+        else:
+            raise SecondMethodInvoke()
+
+
+class PCapGlobalHeaderParser(Parser):
     magic_number = None
     byte_order = None
     version = None
@@ -76,6 +91,7 @@ class PCapGlobalHeaderParser:
         self.link_layer_type = self.header[16:20]
 
     def parse(self):
+        super().parse()
         self.parse_magic_number()
         self.parse_version()
         self.parse_time_offset()
@@ -84,7 +100,7 @@ class PCapGlobalHeaderParser:
         self.parse_link_layer_type()
 
 
-class PCapHeaderParser:
+class PCapHeaderParser(Parser):
     seconds = None
     microseconds = None
     saved_size = None
@@ -107,27 +123,30 @@ class PCapHeaderParser:
         self.seconds = self.header[12:16]
 
     def parse(self):
+        super().parse()
         self.parse_seconds()
         self.parse_microseconds()
         self.parse_saved_size()
         self.parse_captured_size()
 
 
-class PCapDataParser:
+class PCapDataParser(Parser):
     def __init__(self, p_cap, p_cap_header):
         saved_size = p_cap_header.saved_size
         self.data = p_cap.read_data(saved_size)
         self.header = p_cap_header
 
     def parse(self):
-        pass
+        super().parse()
 
 
-class PCapParser:
+class PCapParser(Parser):
     def __init__(self, p_cap):
         self.p_cap = p_cap
 
     def parse(self):
+        super().parse()
+
         global_header_parser = PCapGlobalHeaderParser(self.p_cap)
         global_header_parser.parse()
 
