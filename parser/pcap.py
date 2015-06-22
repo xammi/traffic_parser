@@ -39,7 +39,30 @@ class PCapFile:
 
 class SecondMethodInvoke(Exception):
     def __init__(self):
-        super(SecondMethodInvoke, self).__init__('Method must be called once')
+        super().__init__(
+            'Method must be called once'
+        )
+
+
+class PhInterfaceNotImplemented(Exception):
+    def __init__(self):
+        super().__init__(
+            'Data parser for such kind of physical interface not implemented'
+        )
+
+
+class ProtocolNotImplemented(Exception):
+    def __init__(self):
+        super().__init__(
+            'Such protocol have not been implemented'
+        )
+
+
+class InvalidFieldValue(Exception):
+    def __init__(self):
+        super().__init__(
+            'Unexpected value of special byte field'
+        )
 
 
 class Parser:
@@ -53,14 +76,6 @@ class Parser:
 
 
 class PCapGlobalHeaderParser(Parser):
-    magic_number = None
-    byte_order = None
-    version = None
-    time_offset = None
-    time_accuracy = None
-    snapshot_length = None
-    link_layer_type = None
-
     LINK_LAYERS = {
         0: 'NULL',
         1: 'ETHERNET',
@@ -158,7 +173,15 @@ class PCapGlobalHeaderParser(Parser):
         return 'DLT_' + self.LINK_LAYERS[self.link_layer_type]
 
     def __init__(self, p_cap):
+        super().__init__()
         self.header = p_cap.read_global()
+        self.magic_number = None
+        self.byte_order = None
+        self.version = None
+        self.time_offset = None
+        self.time_accuracy = None
+        self.snapshot_length = None
+        self.link_layer_type = None
 
     def parse_magic_number(self):
         self.magic_number = self.header[:4]
@@ -182,7 +205,7 @@ class PCapGlobalHeaderParser(Parser):
         self.snapshot_length = bytes_to_uint(raw_bytes, self.byte_order)
 
     def parse_link_layer_type(self):
-        raw_bytes = self.header[16:20]
+        raw_bytes = self.header[20:24]
         self.link_layer_type = bytes_to_uint(raw_bytes, self.byte_order)
 
     def parse(self):
@@ -196,14 +219,14 @@ class PCapGlobalHeaderParser(Parser):
 
 
 class PCapHeaderParser(Parser):
-    seconds = None
-    microseconds = None
-    saved_size = None
-    captured_size = None
-
     def __init__(self, p_cap, byte_order):
+        super().__init__()
         self.header = p_cap.read_header()
         self.byte_order = byte_order
+        self.seconds = None
+        self.microseconds = None
+        self.saved_size = None
+        self.captured_size = None
 
     def parse_seconds(self):
         self.seconds = self.header[:4]
@@ -212,8 +235,8 @@ class PCapHeaderParser(Parser):
         self.microseconds = self.header[4:8]
 
     def parse_saved_size(self):
-         raw_bytes = self.header[8:12]
-         self.saved_size = bytes_to_uint(raw_bytes, self.byte_order)
+        raw_bytes = self.header[8:12]
+        self.saved_size = bytes_to_uint(raw_bytes, self.byte_order)
 
     def parse_captured_size(self):
         raw_bytes = self.header[12:16]
@@ -227,14 +250,143 @@ class PCapHeaderParser(Parser):
         self.parse_captured_size()
 
 
-class PCapDataParser(Parser):
-    def __init__(self, p_cap, p_cap_header):
+class BodyParser(Parser):
+    def __init__(self, data, byte_order):
+        super().__init__()
+        self.byte_order = byte_order
+        self.data = data
+        self.processed = None
+
+
+class PCapBodyParser(Parser):
+    def __init__(self, p_cap, p_cap_header, phys_interface_type):
+        super().__init__()
         saved_size = p_cap_header.saved_size
         self.data = p_cap.read_data(saved_size)
         self.header = p_cap_header
+        self.phys_interface_type = phys_interface_type
+        self.help_parsers = []
+
+    def get_init_parser(self):
+        byte_order = self.header.byte_order
+
+        if self.phys_interface_type == 1:
+            return EthernetParser(self.data, byte_order)
+        else:
+            raise PhInterfaceNotImplemented()
 
     def parse(self):
         super().parse()
+        length = self.header.saved_size
+        parser = self.get_init_parser()
+        self.help_parsers.append(parser)
+
+        while length > 0:
+            parser.parse()
+            length -= parser.processed
+
+            parser = parser.next_parser()
+            if parser:
+                self.help_parsers.append(parser)
+            else:
+                break
+
+
+class EthernetParser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+        self.destination = None
+        self.source = None
+        self.type = None
+
+    def parse_destination(self):
+        self.destination = self.data[:6]
+
+    def parse_source(self):
+        self.source = self.data[6:12]
+
+    def parse_type(self):
+        self.type = self.data[12:14]
+
+    def parse(self):
+        super().parse()
+        self.parse_destination()
+        self.parse_source()
+        self.parse_type()
+        self.processed = 14
+
+    def next_parser(self):
+        start = self.processed
+        if self.type == b'\x08\x00':
+            return IPParser(self.data[start:], self.byte_order)
+        else:
+            raise ProtocolNotImplemented()
+
+
+class IPParser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+        self.version = None
+        self.length = None
+        self.source = None
+        self.destination = None
+        self.protocol = None
+
+    def parse_first_byte(self):
+        raw_bytes = self.data[:1]
+        raw_num = bytes_to_uint(raw_bytes, self.byte_order)
+        if 64 < raw_num <= 80:
+            self.version = 4
+            self.length = (raw_num - 64) * 4
+        elif 96 < raw_num:
+            self.version = 6
+            self.length = (raw_num - 96) * 4
+        else:
+            raise InvalidFieldValue()
+
+    def parse_protocol(self):
+        raw_bytes = self.data[9:10]
+        self.protocol = bytes_to_uint(raw_bytes, self.byte_order)
+
+    def parse_source(self):
+        self.source = self.data[12:16]
+
+    def parse_destination(self):
+        self.destination = self.data[16:20]
+
+    def parse(self):
+        super().parse()
+        self.parse_first_byte()
+        self.parse_source()
+        self.parse_destination()
+        self.parse_protocol()
+        self.processed = self.length
+
+    def next_parser(self):
+        start = self.processed
+        if self.protocol == 6:
+            return TCPParser(self.data[start:], self.byte_order)
+        else:
+            raise ProtocolNotImplemented()
+
+
+class TCPParser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+        self.length = None
+
+    def parse_length(self):
+        # raw_bytes = self.data[:1]
+        # self.length = bytes_to_uint(raw_bytes, self.byte_order)
+        self.length = 20
+
+    def parse(self):
+        super().parse()
+        self.parse_length()
+        self.processed = self.length
+
+    def next_parser(self):
+        return None
 
 
 class PCapParser(Parser):
@@ -247,18 +399,19 @@ class PCapParser(Parser):
         global_header_parser = PCapGlobalHeaderParser(self.p_cap)
         global_header_parser.parse()
 
+        phys_interface_type = global_header_parser.link_layer_type
         byte_order = global_header_parser.byte_order
 
-        chunks = []
+        frames = []
         while True:
             header_parser = PCapHeaderParser(self.p_cap, byte_order)
             if header_parser.header == b'':
                 break
 
             header_parser.parse()
-            data_parser = PCapDataParser(self.p_cap, header_parser)
-            data_parser.parse()
+            body_parser = PCapBodyParser(self.p_cap, header_parser, phys_interface_type)
+            body_parser.parse()
 
-            chunks += [(header_parser, data_parser)]
+            frames += [(header_parser, body_parser)]
 
-        return global_header_parser, chunks
+        return global_header_parser, frames
