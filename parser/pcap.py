@@ -251,6 +251,7 @@ class PCapBodyParser(Parser):
 
         while length > 0:
             parser.parse()
+            print(parser.processed)
             length -= parser.processed
 
             parser = parser.next_parser()
@@ -403,6 +404,10 @@ class HttpParser(BodyParser):
     def parse(self):
         super().parse()
         self.parse_headers()
+        self.processed = self.packet_size
+
+    def next_parser(self):
+        return None
 
 
 class PCapParser(Parser):

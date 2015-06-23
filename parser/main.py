@@ -16,4 +16,4 @@ def parse_file(path):
     p_cap.close()
 
 if __name__ == "__main__":
-    parse_file("../samples/simple.cap")
+    parse_file("../samples/http.cap")
