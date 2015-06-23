@@ -39,3 +39,10 @@ class InvalidFieldValue(PCapException):
         super().__init__(
             'Unexpected value of special byte field'
         )
+
+
+class InvalidHttpFormat(PCapException):
+    def __init__(self):
+        super().__init__(
+            'Unexpected value of special byte field'
+        )

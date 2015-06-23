@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from utils import LE, BE, bytes_to_uint
+from utils import LE, BE, bytes_to_uint, bytes_to_string
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
-    ProtocolNotImplemented, InvalidFieldValue
+    ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
 
 __author__ = 'max'
 
@@ -396,15 +396,42 @@ class HttpParser(BodyParser):
 
         self.starting_line = None
         self.headers = dict()
-        self.body = None
+        self.body = ''
 
-    def parse_headers(self):
-        pass
+    def parse_starting_line(self, line):
+        self.starting_line = line
+
+    def parse_header(self, line):
+        key, value = line.split(':', 1)
+        key = key.strip()
+        value = value.strip()
+        self.headers[key] = value
+
+    def parse_headers(self, lines):
+        for (I, line) in enumerate(lines):
+            if line == '':
+                return I
+            if I != 0:
+                self.parse_header(line)
+        return None
+
+    def parse_body(self, body_start_num, lines):
+        for I in range(body_start_num, len(lines)):
+            self.body += lines[I]
 
     def parse(self):
         super().parse()
-        self.parse_headers()
-        self.processed = self.packet_size
+        char_data = bytes_to_string(self.data[:self.packet_size])
+        lines = char_data.splitlines()
+
+        if len(lines) > 0:
+            self.parse_starting_line(lines[0])
+            empty_str_index = self.parse_headers(lines)
+
+            self.parse_body(empty_str_index + 1, lines)
+            self.processed = self.packet_size
+        else:
+            raise InvalidHttpFormat()
 
     def next_parser(self):
         return None
