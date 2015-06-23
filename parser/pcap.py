@@ -2,13 +2,10 @@
 # encoding: utf-8
 
 from utils import LE, BE, bytes_to_uint
+from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
+    ProtocolNotImplemented, InvalidFieldValue
 
 __author__ = 'max'
-
-
-class PCapFormatException(Exception):
-    def __init__(self, message):
-        super(PCapFormatException, self).__init__(message)
 
 
 class PCapFile:
@@ -34,35 +31,7 @@ class PCapFile:
             data = self.file.read(size)
             return data
         except IOError:
-            raise PCapFormatException('Wrong length of ' + err_format_msg)
-
-
-class SecondMethodInvoke(Exception):
-    def __init__(self):
-        super().__init__(
-            'Method must be called once'
-        )
-
-
-class PhInterfaceNotImplemented(Exception):
-    def __init__(self):
-        super().__init__(
-            'Data parser for such kind of physical interface not implemented'
-        )
-
-
-class ProtocolNotImplemented(Exception):
-    def __init__(self):
-        super().__init__(
-            'Such protocol have not been implemented'
-        )
-
-
-class InvalidFieldValue(Exception):
-    def __init__(self):
-        super().__init__(
-            'Unexpected value of special byte field'
-        )
+            raise FormatException('Wrong length of ' + err_format_msg)
 
 
 class Parser:
@@ -268,15 +237,14 @@ class PCapBodyParser(Parser):
         self.help_parsers = []
 
     def get_init_parser(self):
-        byte_order = self.header.byte_order
+        byte_order = BE
 
         if self.phys_interface_type == 1:
             return EthernetParser(self.data, byte_order)
         else:
             raise PhInterfaceNotImplemented()
 
-    def parse(self):
-        super().parse()
+    def forward_parse(self):
         length = self.header.saved_size
         parser = self.get_init_parser()
         self.help_parsers.append(parser)
@@ -290,6 +258,13 @@ class PCapBodyParser(Parser):
                 self.help_parsers.append(parser)
             else:
                 break
+        return length
+
+    def parse(self):
+        super().parse()
+        length = self.forward_parse()
+        if length > 0:
+            print('Not parsed %d bytes' % length)
 
 
 class EthernetParser(BodyParser):
@@ -328,6 +303,7 @@ class IPParser(BodyParser):
         super().__init__(data, byte_order)
         self.version = None
         self.length = None
+        self.total = None
         self.source = None
         self.destination = None
         self.protocol = None
@@ -335,14 +311,18 @@ class IPParser(BodyParser):
     def parse_first_byte(self):
         raw_bytes = self.data[:1]
         raw_num = bytes_to_uint(raw_bytes, self.byte_order)
-        if 64 < raw_num <= 80:
-            self.version = 4
-            self.length = (raw_num - 64) * 4
-        elif 96 < raw_num:
-            self.version = 6
-            self.length = (raw_num - 96) * 4
-        else:
+        firstb, secondb = raw_num // 16, raw_num % 16
+        if firstb not in [4, 6]:
             raise InvalidFieldValue()
+        self.version = firstb
+        self.length = secondb * 4
+
+    def parse_total(self):
+        raw_bytes = self.data[2:4]
+        raw_num = bytes_to_uint(raw_bytes, self.byte_order)
+        if raw_num < 20 or raw_num > 65535:
+            return InvalidFieldValue()
+        self.total = raw_num
 
     def parse_protocol(self):
         raw_bytes = self.data[9:10]
@@ -357,6 +337,7 @@ class IPParser(BodyParser):
     def parse(self):
         super().parse()
         self.parse_first_byte()
+        self.parse_total()
         self.parse_source()
         self.parse_destination()
         self.parse_protocol()
@@ -365,33 +346,78 @@ class IPParser(BodyParser):
     def next_parser(self):
         start = self.processed
         if self.protocol == 6:
-            return TCPParser(self.data[start:], self.byte_order)
+            tcp_packet_size = self.total - self.length
+            return TCPParser(self.data[start:], tcp_packet_size, self.byte_order)
         else:
             raise ProtocolNotImplemented()
 
 
 class TCPParser(BodyParser):
-    def __init__(self, data, byte_order):
+    def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
+        self.packet_size = packet_size
         self.length = None
 
     def parse_length(self):
-        # raw_bytes = self.data[:1]
-        # self.length = bytes_to_uint(raw_bytes, self.byte_order)
-        self.length = 20
+        raw_bytes = self.data[12:13]
+        raw_num = bytes_to_uint(raw_bytes, self.byte_order)
+        firstb, secondb = raw_num // 16, raw_num % 16
+        if secondb != 0 or firstb < 5 or firstb > 15:
+            raise InvalidFieldValue()
+        self.length = firstb * 4
+
+    def parse_padding(self):
+        length = len(self.data)
+        counter = self.length
+        while counter < length and self.data[counter] == 0:
+            counter += 1
+            self.length += 1
 
     def parse(self):
         super().parse()
         self.parse_length()
+        self.parse_padding()
         self.processed = self.length
 
     def next_parser(self):
-        return None
+        start = self.processed
+        http_packet_size = self.packet_size - self.length
+        if http_packet_size > 0:
+            return HttpParser(self.data[start:], http_packet_size, self.byte_order)
+        else:
+            return None
+
+
+class HttpParser(BodyParser):
+    def __init__(self, data, packet_size, byte_order):
+        super().__init__(data, byte_order)
+        self.packet_size = packet_size
+
+        self.starting_line = None
+        self.headers = dict()
+        self.body = None
+
+    def parse_headers(self):
+        pass
+
+    def parse(self):
+        super().parse()
+        self.parse_headers()
 
 
 class PCapParser(Parser):
     def __init__(self, p_cap):
         self.p_cap = p_cap
+
+    def parse_frame(self, byte_order, phys_interface_type):
+        header_parser = PCapHeaderParser(self.p_cap, byte_order)
+        if header_parser.header == b'':
+            return None
+
+        header_parser.parse()
+        body_parser = PCapBodyParser(self.p_cap, header_parser, phys_interface_type)
+        body_parser.parse()
+        return header_parser, body_parser
 
     def parse(self):
         super().parse()
@@ -403,15 +429,18 @@ class PCapParser(Parser):
         byte_order = global_header_parser.byte_order
 
         frames = []
+        counter = 1
         while True:
-            header_parser = PCapHeaderParser(self.p_cap, byte_order)
-            if header_parser.header == b'':
-                break
+            try:
+                frame = self.parse_frame(byte_order, phys_interface_type)
+                if not frame:
+                    break
 
-            header_parser.parse()
-            body_parser = PCapBodyParser(self.p_cap, header_parser, phys_interface_type)
-            body_parser.parse()
+                frames += [frame]
+                print('Frame number %d parsed' % counter)
+                counter += 1
 
-            frames += [(header_parser, body_parser)]
+            except PCapException as e:
+                print(e.__str__())
 
         return global_header_parser, frames

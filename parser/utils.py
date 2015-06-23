@@ -14,3 +14,7 @@ BYTE_ORDER = {
 
 def bytes_to_uint(raw_bytes, byte_order):
     return int.from_bytes(raw_bytes, byteorder=BYTE_ORDER[byte_order], signed=False)
+
+
+def bytes_to_string(raw_bytes):
+    return raw_bytes.decode(encoding='UTF-8')
