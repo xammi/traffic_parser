@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
+from exceptions import NotUnicode
+
 __author__ = 'max'
 
 
@@ -17,4 +19,7 @@ def bytes_to_uint(raw_bytes, byte_order):
 
 
 def bytes_to_string(raw_bytes):
-    return raw_bytes.decode(encoding='UTF-8')
+    try:
+        return raw_bytes.decode(encoding='UTF-8')
+    except UnicodeDecodeError:
+        raise NotUnicode()

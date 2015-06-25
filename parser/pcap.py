@@ -358,6 +358,9 @@ class TCPParser(BodyParser):
         super().__init__(data, byte_order)
         self.packet_size = packet_size
         self.length = None
+        self.flags = None
+        self.seq_num = None
+        self.ack_num = None
 
     def parse_length(self):
         raw_bytes = self.data[12:13]
@@ -374,9 +377,21 @@ class TCPParser(BodyParser):
             counter += 1
             self.length += 1
 
+    def parse_flags(self):
+        self.flags = self.data[12:14]
+
+    def parse_seq_num(self):
+        self.seq_num = self.data[4:8]
+
+    def parse_ack_num(self):
+        self.ack_num = self.data[8:12]
+
     def parse(self):
         super().parse()
         self.parse_length()
+        self.parse_flags()
+        self.parse_seq_num()
+        self.parse_ack_num()
         self.parse_padding()
         self.processed = self.length
 
@@ -399,7 +414,11 @@ class HttpParser(BodyParser):
         self.body = ''
 
     def parse_starting_line(self, line):
-        self.starting_line = line
+        if len(line.split(' ')) == 3:
+            self.starting_line = line
+            return True
+        else:
+            return False
 
     def parse_header(self, line):
         key, value = line.split(':', 1)
@@ -425,10 +444,12 @@ class HttpParser(BodyParser):
         lines = char_data.splitlines()
 
         if len(lines) > 0:
-            self.parse_starting_line(lines[0])
-            empty_str_index = self.parse_headers(lines)
-
-            self.parse_body(empty_str_index + 1, lines)
+            parsed = self.parse_starting_line(lines[0])
+            if parsed:
+                empty_str_index = self.parse_headers(lines)
+                self.parse_body(empty_str_index + 1, lines)
+            else:
+                self.parse_body(0, lines)
             self.processed = self.packet_size
         else:
             raise InvalidHttpFormat()

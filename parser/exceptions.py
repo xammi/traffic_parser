@@ -46,3 +46,10 @@ class InvalidHttpFormat(PCapException):
         super().__init__(
             'Unexpected value of special byte field'
         )
+
+
+class NotUnicode(PCapException):
+    def __init__(self):
+        super().__init__(
+            'Expected byte data must be unicode'
+        )
