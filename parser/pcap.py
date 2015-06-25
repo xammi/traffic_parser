@@ -349,6 +349,8 @@ class IPParser(BodyParser):
         if self.protocol == 6:
             tcp_packet_size = self.total - self.length
             return TCPParser(self.data[start:], tcp_packet_size, self.byte_order)
+        elif self.protocol == 17:
+            return UDPParser(self.data[start:], self.byte_order)
         else:
             raise ProtocolNotImplemented()
 
@@ -402,6 +404,36 @@ class TCPParser(BodyParser):
             return HttpParser(self.data[start:], http_packet_size, self.byte_order)
         else:
             return None
+
+
+class UDPParser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+        self.source_port = None
+        self.destination_port = None
+        self.data_length = None
+
+    def parse_source_port(self):
+        raw_bytes = self.data[:2]
+        self.source_port = bytes_to_uint(raw_bytes, self.byte_order)
+
+    def parse_destination_port(self):
+        raw_bytes = self.data[2:4]
+        self.destination_port = bytes_to_uint(raw_bytes, self.byte_order)
+
+    def parse_data_length(self):
+        raw_bytes = self.data[4:6]
+        self.data_length = bytes_to_uint(raw_bytes, self.byte_order)
+
+    def parse(self):
+        super().parse()
+        self.parse_source_port()
+        self.parse_destination_port()
+        self.parse_data_length()
+        self.processed = 8
+
+    def next_parser(self):
+        return None
 
 
 class HttpParser(BodyParser):
