@@ -433,7 +433,8 @@ class UDPParser(BodyParser):
         self.processed = 8
 
     def next_parser(self):
-        return None
+        start = self.processed
+        return DNSParser(self.data[start:], self.byte_order)
 
 
 class HttpParser(BodyParser):
@@ -485,6 +486,60 @@ class HttpParser(BodyParser):
             self.processed = self.packet_size
         else:
             raise InvalidHttpFormat()
+
+    def next_parser(self):
+        return None
+
+
+class DNSParser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+        self.transaction_id = None
+        self.questions = None
+        self.answers_rss = None
+        self.flags = None
+        self.queries = []
+
+    def parse_transaction_id(self):
+        self.transaction_id = self.data[:2]
+
+    def parse_flags(self):
+        self.flags = self.data[2:4]
+
+    def parse_questions(self):
+        raw_bytes = self.data[4:6]
+        self.questions = bytes_to_uint(raw_bytes, self.byte_order)
+
+    def parse_answers_rss(self):
+        raw_bytes = self.data[6:8]
+        self.answers_rss = bytes_to_uint(raw_bytes, self.byte_order)
+
+    def parse_queries(self):
+        for I in range(0, self.questions):
+            raw_query = self.data[12:43]
+            name = raw_query[:-4]
+            tpe = raw_query[-4:-2]
+            cls = raw_query[-2:]
+            self.queries.append({'name': name, 'type': tpe, 'class': cls})
+
+    def parse_answers(self):
+        for I in range(0, self.answers_rss):
+            raw_query = self.data[12:43]
+            name = raw_query[:-14]
+            tpe = raw_query[-14:-12]
+            cls = raw_query[-12:-10]
+            address = raw_query[-4:]
+            self.queries.append({'name': name, 'type': tpe, 'class': cls, 'addr': address})
+
+    def parse(self):
+        super().parse()
+        self.parse_transaction_id()
+        self.parse_flags()
+        self.parse_questions()
+        self.parse_answers_rss()
+        self.parse_queries()
+        self.parse_answers()
+        self.processed = 0
 
     def next_parser(self):
         return None
