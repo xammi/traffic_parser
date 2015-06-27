@@ -434,7 +434,8 @@ class UDPParser(BodyParser):
 
     def next_parser(self):
         start = self.processed
-        return DNSParser(self.data[start:], self.byte_order)
+        dns_packet_size = self.data_length
+        return DNSParser(self.data[start:], dns_packet_size, self.byte_order)
 
 
 class HttpParser(BodyParser):
@@ -492,8 +493,10 @@ class HttpParser(BodyParser):
 
 
 class DNSParser(BodyParser):
-    def __init__(self, data, byte_order):
+    def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
+        self.packet_size = packet_size
+
         self.transaction_id = None
         self.questions = None
         self.answers_rss = None
@@ -515,6 +518,8 @@ class DNSParser(BodyParser):
         self.answers_rss = bytes_to_uint(raw_bytes, self.byte_order)
 
     def parse_queries(self):
+        """ непонятно, как выяснить длину одного запроса """
+
         for I in range(0, self.questions):
             raw_query = self.data[12:43]
             name = raw_query[:-4]
@@ -523,6 +528,8 @@ class DNSParser(BodyParser):
             self.queries.append({'name': name, 'type': tpe, 'class': cls})
 
     def parse_answers(self):
+        """ непонятно, как выяснить длину одного ответа """
+
         for I in range(0, self.answers_rss):
             raw_query = self.data[12:43]
             name = raw_query[:-14]
@@ -539,7 +546,7 @@ class DNSParser(BodyParser):
         self.parse_answers_rss()
         self.parse_queries()
         self.parse_answers()
-        self.processed = 0
+        self.processed = self.packet_size
 
     def next_parser(self):
         return None
