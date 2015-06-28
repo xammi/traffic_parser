@@ -613,10 +613,37 @@ class DNSParser(BodyParser):
 
 
 class SMTPParser(BodyParser):
+    current_mail_data = ''
+    file_counter = 0
+
+    SMTH_STATE = 0
+    PRE_DATA_STATE = 1
+    DATA_STATE = 2
+
+    session_state = SMTH_STATE
+
     def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
         self.packet_size = packet_size
+        # self.ip_address = ip_address
         self.parts = []
+
+    def save_current_mail_data(self):
+        if SMTPParser.current_mail_data != '':
+            path = 'smtp_data_%d' % SMTPParser.file_counter
+            save_file(path, SMTPParser.current_mail_data)
+            SMTPParser.current_mail_data = ''
+            SMTPParser.file_counter += 1
+
+    def check_state(self, part):
+        if SMTPParser.session_state == self.PRE_DATA_STATE and 'Enter message' not in part:
+            SMTPParser.session_state = self.DATA_STATE
+
+        if 'DATA' in part:
+            SMTPParser.session_state = self.PRE_DATA_STATE
+        elif '250 OK' in part:
+            SMTPParser.session_state = self.SMTH_STATE
+            self.save_current_mail_data()
 
     def parse(self):
         super().parse()
@@ -624,6 +651,9 @@ class SMTPParser(BodyParser):
         while pos < self.packet_size:
             part, pos = read_til(self.data, pos, b'\x0d\x0a')
             part = bytes_to_string(part)
+            self.check_state(part)
+            if SMTPParser.session_state == self.DATA_STATE:
+                SMTPParser.current_mail_data += part
             self.parts.append(part)
 
         self.processed = self.packet_size
