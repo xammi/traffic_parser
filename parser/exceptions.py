@@ -14,23 +14,23 @@ class FormatException(PCapException):
 
 
 class SecondMethodInvoke(PCapException):
-    def __init__(self):
+    def __init__(self, method_name):
         super().__init__(
-            'Method must be called once'
+            'Method (%s) must be called once' % method_name
         )
 
 
 class PhInterfaceNotImplemented(PCapException):
-    def __init__(self):
+    def __init__(self, interface):
         super().__init__(
-            'Data parser for such kind of physical interface not implemented'
+            'Data parser for such kind of physical interface (%s) not implemented' % interface
         )
 
 
 class ProtocolNotImplemented(PCapException):
-    def __init__(self):
+    def __init__(self, protocol):
         super().__init__(
-            'Such protocol have not been implemented'
+            'Such protocol (%d) have not been implemented' % protocol
         )
 
 

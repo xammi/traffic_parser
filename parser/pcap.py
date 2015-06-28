@@ -41,7 +41,7 @@ class Parser:
         if not self.parse_was_invoke:
             self.parse_was_invoke = True
         else:
-            raise SecondMethodInvoke()
+            raise SecondMethodInvoke('parse')
 
 
 class PCapGlobalHeaderParser(Parser):
@@ -242,7 +242,8 @@ class PCapBodyParser(Parser):
         if self.phys_interface_type == 1:
             return EthernetParser(self.data, byte_order)
         else:
-            raise PhInterfaceNotImplemented()
+            interface = PCapGlobalHeaderParser.LINK_LAYERS[self.phys_interface_type]
+            raise PhInterfaceNotImplemented(interface)
 
     def forward_parse(self):
         length = self.header.saved_size
@@ -296,7 +297,7 @@ class EthernetParser(BodyParser):
         if self.type == b'\x08\x00':
             return IPParser(self.data[start:], self.byte_order)
         else:
-            raise ProtocolNotImplemented()
+            raise ProtocolNotImplemented(self.type)
 
 
 class IPParser(BodyParser):
@@ -352,7 +353,7 @@ class IPParser(BodyParser):
         elif self.protocol == 17:
             return UDPParser(self.data[start:], self.byte_order)
         else:
-            raise ProtocolNotImplemented()
+            raise ProtocolNotImplemented(self.protocol)
 
 
 class TCPParser(BodyParser):
