@@ -41,6 +41,17 @@ def read_til_zero(data, start):
     return data[start:pos], pos + 1
 
 
+def read_til(data, start, end_seq):
+    end_len = len(end_seq)
+    pos = start
+    while True:
+        if data[pos:pos + end_len] == end_seq:
+            break
+        else:
+            pos += 1
+    return data[start:pos], pos + end_len
+
+
 def save_file(path, data, buffered=False):
     prefix_path = '/home/max/traffic_parser/result/'
     path, name = os.path.split(path)

@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 from utils import LE, BE, bytes_to_uint, bytes_to_string, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE, \
-    FTP_TRANSFER_START, read_til_zero, save_file
+    FTP_TRANSFER_START, read_til_zero, save_file, read_til
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
     ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
 import re
@@ -597,11 +597,17 @@ class DNSParser(BodyParser):
 
 
 class SMTPParser(BodyParser):
-    def __init__(self, data, byte_order):
+    def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
+        self.packet_size = packet_size
+        self.parts = []
 
     def parse(self):
         super().parse()
+        pos = 0
+        while pos < self.packet_size:
+            part, pos = read_til(self.data, pos, b'0d0a')
+            self.parts.append(part)
 
     def next_parser(self):
         return None
