@@ -613,6 +613,8 @@ class DNSParser(BodyParser):
 
 
 class SMTPParser(BodyParser):
+
+    # TODO: kostyl, use analyzer
     current_mail_data = ''
     file_counter = 0
 
@@ -621,6 +623,7 @@ class SMTPParser(BodyParser):
     DATA_STATE = 2
 
     session_state = SMTH_STATE
+    # TODO: end kostyl
 
     def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
@@ -628,6 +631,7 @@ class SMTPParser(BodyParser):
         # self.ip_address = ip_address
         self.parts = []
 
+    # TODO: kostyl, use analyzer
     def save_current_mail_data(self):
         if SMTPParser.current_mail_data != '':
             path = 'smtp_data_%d' % SMTPParser.file_counter
@@ -644,6 +648,7 @@ class SMTPParser(BodyParser):
         elif '250 OK' in part:
             SMTPParser.session_state = self.SMTH_STATE
             self.save_current_mail_data()
+    # TODO: end kostyl
 
     def parse(self):
         super().parse()
@@ -651,9 +656,13 @@ class SMTPParser(BodyParser):
         while pos < self.packet_size:
             part, pos = read_til(self.data, pos, b'\x0d\x0a')
             part = bytes_to_string(part)
+
+            # TODO: kostyl, use analyzer
             self.check_state(part)
             if SMTPParser.session_state == self.DATA_STATE:
                 SMTPParser.current_mail_data += part
+            # TODO: end kostyl
+
             self.parts.append(part)
 
         self.processed = self.packet_size
