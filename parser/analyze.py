@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from pcap import EthernetParser, IPParser, TCPParser, HttpParser, SMTPParser, SMB2Parser, POP3Parser
+from pcap import EthernetParser, IPParser, TCPParser, HTTPParser, SMTPParser, SMB2Parser, POP3Parser
 from exceptions import SecondMethodInvoke
 
 __author__ = 'max'
@@ -35,7 +35,7 @@ class FramesAnalyzer(Analyzer):
         self.frames = frames
 
         self.ANALYZERS = {
-            HttpParser.__name__: HttpAnalyzer()
+            HTTPParser.__name__: HttpAnalyzer()
         }
 
     def analyze_frame(self, frame):

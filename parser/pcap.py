@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from constants import HTTP_PORTS, FTP_PORTS, SMTP_PORTS, LE, BE, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE,\
+from constants import HTTP_PORTS, SMTP_PORTS, LE, BE, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE,\
     FTP_TRANSFER_START
 from utils import bytes_to_uint, bytes_to_string, read_til, read_til_zero, save_file
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
@@ -395,8 +395,8 @@ class TCPParser(BodyParser):
         self.ack_num = self.data[8:12]
 
     def parse_source_port(self):
-        bytes = self.data[4:8]
-        self.source_port = bytes_to_uint(bytes, self.byte_order)
+        raw_bytes = self.data[:2]
+        self.source_port = bytes_to_uint(raw_bytes, self.byte_order)
 
     def parse(self):
         super().parse()
@@ -412,11 +412,11 @@ class TCPParser(BodyParser):
         start = self.processed
         packet_size = self.packet_size - self.length
         if self.source_port in HTTP_PORTS:
-            return HttpParser(self.data[start:], packet_size, self.byte_order)
-        elif self.source_port in FTP_PORTS:
-            return FtpParser(self.data[start:], packet_size, self.byte_order)
+            return HTTPParser(self.data[start:], packet_size, self.byte_order)
+        elif self.source_port in SMTP_PORTS:
+            return SMTPParser(self.data[start:], packet_size, self.byte_order)
         else:
-            raise ProtocolNotImplemented(6)
+            return FtpParser(self.data[start:], packet_size, self.byte_order)
 
 
 class UDPParser(BodyParser):
@@ -451,7 +451,7 @@ class UDPParser(BodyParser):
         return DNSParser(self.data[start:], dns_packet_size, self.byte_order)
 
 
-class HttpParser(BodyParser):
+class HTTPParser(BodyParser):
     current_file = ''
     current_file_name = None
 
@@ -497,11 +497,11 @@ class HttpParser(BodyParser):
         if current_name.isnumeric():
             return
 
-        if HttpParser.current_file_name is not None and HttpParser.current_file_name != current_name:
-            save_file(HttpParser.current_file_name, HttpParser.current_file)
-            HttpParser.current_file = ''
+        if HTTPParser.current_file_name is not None and HTTPParser.current_file_name != current_name:
+            save_file(HTTPParser.current_file_name, HTTPParser.current_file)
+            HTTPParser.current_file = ''
 
-        HttpParser.current_file_name = current_name
+        HTTPParser.current_file_name = current_name
     # TODO: end kostyl
 
     def parse(self):
@@ -524,7 +524,7 @@ class HttpParser(BodyParser):
             self.processed = self.packet_size
 
             # TODO: kostyl, use analyzer
-            HttpParser.current_file += self.body
+            HTTPParser.current_file += self.body
             # TODO: end kostyl
         else:
             raise InvalidHttpFormat()
@@ -615,6 +615,7 @@ class SMTPParser(BodyParser):
         while pos < self.packet_size:
             part, pos = read_til(self.data, pos, b'0d0a')
             self.parts.append(part)
+        return None
 
     def next_parser(self):
         return None

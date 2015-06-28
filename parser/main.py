@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from pcap import PCapFile, PCapParser, HttpParser
+from pcap import PCapFile, PCapParser, HTTPParser
 from utils import save_file
+from constants import SRC_FILE
 # from analyze import FramesAnalyzer
 
 __author__ = 'max'
@@ -19,12 +20,12 @@ def parse_file(path):
     # analyzer.analyze()
 
     # TODO: kostyl, use analyzer
-    if HttpParser.current_file_name is not None:
-        save_file(HttpParser.current_file_name, HttpParser.current_file)
+    if HTTPParser.current_file_name is not None:
+        save_file(HTTPParser.current_file_name, HTTPParser.current_file)
     # TODO: end kostyl
 
     p_cap.close()
 
 if __name__ == "__main__":
-    parse_file("/home/max/workspace/git/traffic_parser/samples/ftp2.pcap")
+    parse_file(SRC_FILE)
 
