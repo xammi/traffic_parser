@@ -33,10 +33,11 @@ def read_til_zero(data, start):
 
 
 def read_til(data, start, end_seq):
+    data_len = len(data)
     end_len = len(end_seq)
     pos = start
     while True:
-        if data[pos:pos + end_len] == end_seq:
+        if pos + end_len >= data_len or data[pos:pos + end_len] == end_seq:
             break
         else:
             pos += 1

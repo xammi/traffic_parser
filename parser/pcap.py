@@ -5,7 +5,7 @@ from constants import HTTP_PORTS, SMTP_PORTS, LE, BE, FTP_HEADER_LENGTH, FTP_TRA
     FTP_TRANSFER_START
 from utils import bytes_to_uint, bytes_to_string, read_til, read_til_zero, save_file
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
-    ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
+    ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat, NotUnicode
 import re
 
 
@@ -369,6 +369,7 @@ class TCPParser(BodyParser):
         self.seq_num = None
         self.ack_num = None
         self.source_port = None
+        self.destination_port = None
 
     def parse_length(self):
         raw_bytes = self.data[12:13]
@@ -398,6 +399,10 @@ class TCPParser(BodyParser):
         raw_bytes = self.data[:2]
         self.source_port = bytes_to_uint(raw_bytes, self.byte_order)
 
+    def parse_destination_port(self):
+        raw_bytes = self.data[2:4]
+        self.destination_port = bytes_to_uint(raw_bytes, self.byte_order)
+
     def parse(self):
         super().parse()
         self.parse_length()
@@ -406,14 +411,15 @@ class TCPParser(BodyParser):
         self.parse_ack_num()
         self.parse_padding()
         self.parse_source_port()
+        self.parse_destination_port()
         self.processed = self.length
 
     def next_parser(self):
         start = self.processed
         packet_size = self.packet_size - self.length
-        if self.source_port in HTTP_PORTS:
+        if self.source_port in HTTP_PORTS or self.destination_port in HTTP_PORTS:
             return HTTPParser(self.data[start:], packet_size, self.byte_order)
-        elif self.source_port in SMTP_PORTS:
+        elif self.source_port in SMTP_PORTS or self.destination_port in SMTP_PORTS:
             return SMTPParser(self.data[start:], packet_size, self.byte_order)
         else:
             return FtpParser(self.data[start:], packet_size, self.byte_order)
@@ -448,7 +454,10 @@ class UDPParser(BodyParser):
     def next_parser(self):
         start = self.processed
         dns_packet_size = self.data_length
-        return DNSParser(self.data[start:], dns_packet_size, self.byte_order)
+        if self.source_port == 53 or self.destination_port == 53:
+            return DNSParser(self.data[start:], dns_packet_size, self.byte_order)
+        else:
+            raise ProtocolNotImplemented(17)
 
 
 class HTTPParser(BodyParser):
@@ -613,9 +622,11 @@ class SMTPParser(BodyParser):
         super().parse()
         pos = 0
         while pos < self.packet_size:
-            part, pos = read_til(self.data, pos, b'0d0a')
+            part, pos = read_til(self.data, pos, b'\x0d\x0a')
+            part = bytes_to_string(part)
             self.parts.append(part)
-        return None
+
+        self.processed = self.packet_size
 
     def next_parser(self):
         return None
