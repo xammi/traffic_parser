@@ -562,6 +562,39 @@ class DNSParser(BodyParser):
         return None
 
 
+class SMTPParser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+
+    def parse(self):
+        super().parse()
+
+    def next_parser(self):
+        return None
+
+
+class SMB2Parser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+
+    def parse(self):
+        super().parse()
+
+    def next_parser(self):
+        return None
+
+
+class POP3Parser(BodyParser):
+    def __init__(self, data, byte_order):
+        super().__init__(data, byte_order)
+
+    def parse(self):
+        super().parse()
+
+    def next_parser(self):
+        return None
+
+
 class PCapParser(Parser):
     def __init__(self, p_cap):
         self.p_cap = p_cap
