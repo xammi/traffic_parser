@@ -481,6 +481,7 @@ class HttpParser(BodyParser):
         for I in range(body_start_num, len(lines)):
             self.body += lines[I]
 
+    # TODO: kostyl, use analyzer
     def set_current_file_name(self):
         current_name = self.starting_line.split(' ')[1]
         if '?' in current_name:
@@ -490,10 +491,11 @@ class HttpParser(BodyParser):
             return
 
         if HttpParser.current_file_name is not None and HttpParser.current_file_name != current_name:
-            # save_file(HttpParser.current_file_name, HttpParser.current_file)
-            # self.current_file = ''
-            pass
+            save_file(HttpParser.current_file_name, HttpParser.current_file)
+            HttpParser.current_file = ''
+
         HttpParser.current_file_name = current_name
+    # TODO: end kostyl
 
     def parse(self):
         super().parse()
@@ -503,14 +505,20 @@ class HttpParser(BodyParser):
         if len(lines) > 0:
             parsed = self.parse_starting_line(lines[0])
             if parsed:
+                # TODO: kostyl, use analyzer
                 self.set_current_file_name()
+                # TODO: end kostyl
+
                 empty_str_index = self.parse_headers(lines)
                 self.parse_body(empty_str_index + 1, lines)
             else:
                 self.parse_body(0, lines)
 
             self.processed = self.packet_size
+
+            # TODO: kostyl, use analyzer
             HttpParser.current_file += self.body
+            # TODO: end kostyl
         else:
             raise InvalidHttpFormat()
 

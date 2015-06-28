@@ -53,3 +53,10 @@ class NotUnicode(PCapException):
         super().__init__(
             'Expected byte data must be unicode'
         )
+
+
+class FileAlreadyExist(PCapException):
+    def __init__(self, path):
+        super().__init__(
+            'File already exists at (%s)' % path
+        )

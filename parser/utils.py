@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from exceptions import NotUnicode
+from exceptions import NotUnicode, FileAlreadyExist
 import os
 import errno
 
@@ -40,12 +40,24 @@ def read_til_zero(data, start):
             pos += 1
     return data[start:pos], pos + 1
 
-def save_file(path, data):
+
+def save_file(path, data, buffered=False):
+    prefix_path = '/home/max/traffic_parser/result/'
     path, name = os.path.split(path)
-    path = '/home/max/parser/' + path + '/'
+    if path != '/':
+        path = prefix_path + path + '/'
+    else:
+        path = prefix_path
+
     try:
         os.makedirs(path)
     except OSError as e:
-        if e.errno != errno.EEXIST:
+        if e.errno == errno.EEXIST:
+            pass
+        else:
             raise
-    open(path + name, 'wb').write(data)
+
+    if not buffered:
+        open(path + name, 'w').write(data)
+    else:
+        open(path + name, 'wb').write(data)

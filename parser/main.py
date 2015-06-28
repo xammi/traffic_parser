@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from pcap import PCapFile, PCapParser
+from pcap import PCapFile, PCapParser, HttpParser
+from utils import save_file
 # from analyze import FramesAnalyzer
 
 __author__ = 'max'
@@ -16,6 +17,11 @@ def parse_file(path):
 
     # analyzer = FramesAnalyzer(frames)
     # analyzer.analyze()
+
+    # TODO: kostyl, use analyzer
+    if HttpParser.current_file_name is not None:
+        save_file(HttpParser.current_file_name, HttpParser.current_file)
+    # TODO: end kostyl
 
     p_cap.close()
 
