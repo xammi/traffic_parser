@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 from utils import LE, BE, bytes_to_uint, bytes_to_string, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE, \
-    FTP_TRANSFER_START, read_til_zero
+    FTP_TRANSFER_START, read_til_zero, save_file
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
     ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
 import re
@@ -499,7 +499,6 @@ class HttpParser(BodyParser):
         return None
 
 
-
 class DNSParser(BodyParser):
     def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
@@ -629,7 +628,8 @@ class FtpParser(BodyParser):
     def parse(self):
         super().parse()
         self.processed = FTP_HEADER_LENGTH
-        if self.is_code_type(FTP_TRANSFER_COMPLETE):
+        if self.is_code_type(FTP_TRANSFER_COMPLETE) and FtpParser.current_file_name is not None:
+            save_file(FtpParser.current_file_name, FtpParser.files[FtpParser.current_file_name])
             FtpParser.current_file_name = None
         if FtpParser.current_file_name is not None:
                 FtpParser.files[FtpParser.current_file_name] += self.data
