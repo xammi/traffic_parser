@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
+from constants import SRC_FILE
 from pcap import PCapFile, PCapParser, HTTPParser
 from utils import save_file
 
@@ -25,6 +26,6 @@ def parse_file(path):
     p_cap.close()
 
 if __name__ == "__main__":
-    parse_file("/home/max/workspace/git/traffic_parser/samples/ftp2.pcap")
+    parse_file(SRC_FILE)
 
 
