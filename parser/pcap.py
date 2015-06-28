@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from utils import LE, BE, bytes_to_uint, bytes_to_string, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE, \
-    FTP_TRANSFER_START, read_til_zero, save_file, read_til
+from constants import HTTP_PORTS, FTP_PORTS, SMTP_PORTS, LE, BE, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE,\
+    FTP_TRANSFER_START
+from utils import bytes_to_uint, bytes_to_string, read_til, read_til_zero, save_file
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
     ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
 import re
@@ -367,6 +368,7 @@ class TCPParser(BodyParser):
         self.flags = None
         self.seq_num = None
         self.ack_num = None
+        self.source_port = None
 
     def parse_length(self):
         raw_bytes = self.data[12:13]
@@ -392,6 +394,10 @@ class TCPParser(BodyParser):
     def parse_ack_num(self):
         self.ack_num = self.data[8:12]
 
+    def parse_source_port(self):
+        bytes = self.data[4:8]
+        self.source_port = bytes_to_uint(bytes, self.byte_order)
+
     def parse(self):
         super().parse()
         self.parse_length()
@@ -399,17 +405,18 @@ class TCPParser(BodyParser):
         self.parse_seq_num()
         self.parse_ack_num()
         self.parse_padding()
+        self.parse_source_port()
         self.processed = self.length
 
     def next_parser(self):
         start = self.processed
         packet_size = self.packet_size - self.length
-        if packet_size > 0:
-            if self.length == FTP_HEADER_LENGTH:
-                return FtpParser(self.data[start:], packet_size, self.byte_order)
+        if self.source_port in HTTP_PORTS:
             return HttpParser(self.data[start:], packet_size, self.byte_order)
+        elif self.source_port in FTP_PORTS:
+            return FtpParser(self.data[start:], packet_size, self.byte_order)
         else:
-            return None
+            raise ProtocolNotImplemented(6)
 
 
 class UDPParser(BodyParser):
@@ -637,7 +644,7 @@ class POP3Parser(BodyParser):
 
 class FtpParser(BodyParser):
 
-    files = {}
+    file = b""
     current_file_name = None
 
     def __init__(self, data, packet_size, byte_order):
@@ -656,16 +663,16 @@ class FtpParser(BodyParser):
         m = r.search(response)
         if m:
             FtpParser.current_file_name = m.group(1)
-            FtpParser.files[FtpParser.current_file_name] = b""
 
     def parse(self):
         super().parse()
         self.processed = FTP_HEADER_LENGTH
         if self.is_code_type(FTP_TRANSFER_COMPLETE) and FtpParser.current_file_name is not None:
-            save_file(FtpParser.current_file_name, FtpParser.files[FtpParser.current_file_name])
+            save_file(FtpParser.current_file_name, FtpParser.file, True)
             FtpParser.current_file_name = None
+            FtpParser.file = b""
         if FtpParser.current_file_name is not None:
-            FtpParser.files[FtpParser.current_file_name] += self.data
+            FtpParser.file += self.data
         elif self.is_code_type(FTP_TRANSFER_START):
             self.set_current_file_name()
 

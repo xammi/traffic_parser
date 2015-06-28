@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
+from constants import BYTE_ORDER, SAVE_PATH
 from exceptions import NotUnicode, FileAlreadyExist
 import os
 import errno
@@ -8,16 +9,6 @@ import errno
 __author__ = 'max'
 
 
-LE = 0
-BE = 1
-BYTE_ORDER = {
-    LE: 'little',
-    BE: 'big'
-}
-
-FTP_HEADER_LENGTH = 32
-FTP_TRANSFER_COMPLETE = '226'
-FTP_TRANSFER_START = '150'
 
 
 def bytes_to_uint(raw_bytes, byte_order):
@@ -53,12 +44,11 @@ def read_til(data, start, end_seq):
 
 
 def save_file(path, data, buffered=False):
-    prefix_path = '/home/max/traffic_parser/result/'
     path, name = os.path.split(path)
     if path != '/':
-        path = prefix_path + path + '/'
+        path = SAVE_PATH + path + '/'
     else:
-        path = prefix_path
+        path = SAVE_PATH
 
     try:
         os.makedirs(path)
