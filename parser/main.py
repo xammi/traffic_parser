@@ -3,8 +3,6 @@
 
 from pcap import PCapFile, PCapParser, HTTPParser
 from utils import save_file
-from constants import SRC_FILE
-# from analyze import FramesAnalyzer
 
 __author__ = 'max'
 
@@ -27,5 +25,6 @@ def parse_file(path):
     p_cap.close()
 
 if __name__ == "__main__":
-    parse_file(SRC_FILE)
+    parse_file("/home/max/workspace/git/traffic_parser/samples/ftp2.pcap")
+
 
