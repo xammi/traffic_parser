@@ -2,7 +2,7 @@
 # encoding: utf-8
 
 from constants import HTTP_PORTS, SMTP_PORTS, LE, BE, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE,\
-    FTP_TRANSFER_START
+    FTP_TRANSFER_START, POP3_PORT
 from utils import bytes_to_uint, bytes_to_string, read_til, read_til_zero, save_file
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
     ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat, NotUnicode
@@ -417,12 +417,15 @@ class TCPParser(BodyParser):
     def next_parser(self):
         start = self.processed
         packet_size = self.packet_size - self.length
+        parametrs = [self.data[start:], packet_size, self.byte_order]
         if self.source_port in HTTP_PORTS or self.destination_port in HTTP_PORTS:
-            return HTTPParser(self.data[start:], packet_size, self.byte_order)
+            return HTTPParser(*parametrs)
         elif self.source_port in SMTP_PORTS or self.destination_port in SMTP_PORTS:
-            return SMTPParser(self.data[start:], packet_size, self.byte_order)
+            return SMTPParser(*parametrs)
+        elif self.source_port == POP3_PORT:
+            return POP3Parser(*parametrs)
         else:
-            return FtpParser(self.data[start:], packet_size, self.byte_order)
+            return FTPParser(*parametrs)
 
 
 class UDPParser(BodyParser):
@@ -683,23 +686,96 @@ class SMB2Parser(BodyParser):
 
 
 class POP3Parser(BodyParser):
-    def __init__(self, data, byte_order):
+
+    sender = None
+    receiver = None
+    date = None
+    subject = None
+    message = None
+
+    def __init__(self, data, packet_size, byte_order):
+        self.packet_size = packet_size
         super().__init__(data, byte_order)
+
+    def is_start_message(self):
+        return True if b'From:' in self.data else False
+
+    def is_end_message(self):
+        end = b'\r\n.\r\n'
+        if end in self.data:
+            self.data = self.data[:self.data.index(end)]
+            return True
+        return False
+
+    def parse_sender(self):
+        response = bytes_to_string(self.data)
+        r = re.compile('From: (.*?)>')
+        m = r.search(response)
+        if m:
+            POP3Parser.sender = m.group(1) + '>'
+
+    def parse_receiver(self):
+        response = bytes_to_string(self.data)
+        r = re.compile('To: (.*?)\r\n')
+        m = r.search(response)
+        if m:
+            POP3Parser.receiver = m.group(1)
+
+    def parse_date(self):
+        response = bytes_to_string(self.data)
+        r = re.compile('Date: (.*?)\r\n')
+        m = r.search(response)
+        if m:
+            POP3Parser.date = m.group(1)
+
+    def parse_subject(self):
+        response = bytes_to_string(self.data)
+        r = re.compile('Subject: (.*?)\r\n')
+        m = r.search(response)
+        if m:
+            POP3Parser.subject = m.group(1)
 
     def parse(self):
         super().parse()
+        self.processed = self.packet_size
+        if self.sender is not None:
+            if self.is_end_message():
+                self.message += self.data
+                print(self.sender)
+                print(self.receiver)
+                print(self.date)
+                print(self.subject)
+                print(self.message)
+                print("_________")
+                self.sender = None
+            else:
+                POP3Parser.message += self.data
+        if self.is_start_message():
+            self.parse_sender()
+            self.parse_receiver()
+            self.parse_date()
+            self.parse_subject()
+            delimiter = b'Encoding: quoted-printable:'
+            if delimiter in self.data:
+                self.data = self.data[self.data.index(delimiter):]
+            delimiter = b'\r\n\r\n'
+            if delimiter in self.data:
+                self.data = self.data[self.data.index(delimiter):]
+            POP3Parser.message = self.data
+            pass
 
     def next_parser(self):
         return None
 
 
-class FtpParser(BodyParser):
+class FTPParser(BodyParser):
 
     file = b""
     current_file_name = None
 
     def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
+        self.packet_size = packet_size
 
     def is_code_type(self, code):
         try:
@@ -717,17 +793,17 @@ class FtpParser(BodyParser):
         r = re.compile('for (.*?) \(')
         m = r.search(response)
         if m:
-            FtpParser.current_file_name = m.group(1)
+            FTPParser.current_file_name = m.group(1)
 
     def parse(self):
         super().parse()
-        self.processed = FTP_HEADER_LENGTH
-        if self.is_code_type(FTP_TRANSFER_COMPLETE) and FtpParser.current_file_name is not None:
-            save_file(FtpParser.current_file_name, FtpParser.file, True)
-            FtpParser.current_file_name = None
-            FtpParser.file = b""
-        if FtpParser.current_file_name is not None:
-            FtpParser.file += self.data
+        self.processed = self.packet_size
+        if self.is_code_type(FTP_TRANSFER_COMPLETE) and FTPParser.current_file_name is not None:
+            save_file(FTPParser.current_file_name, FTPParser.file, True)
+            FTPParser.current_file_name = None
+            FTPParser.file = b""
+        if FTPParser.current_file_name is not None:
+            FTPParser.file += self.data
         elif self.is_code_type(FTP_TRANSFER_START):
             self.set_current_file_name()
 
