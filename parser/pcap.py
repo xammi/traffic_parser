@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from utils import LE, BE, bytes_to_uint, bytes_to_string
+from utils import LE, BE, bytes_to_uint, bytes_to_string, read_til_zero
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
     ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
 
@@ -502,6 +502,7 @@ class DNSParser(BodyParser):
         self.answers_rss = None
         self.flags = None
         self.queries = []
+        self.answers = []
 
     def parse_transaction_id(self):
         self.transaction_id = self.data[:2]
@@ -518,25 +519,33 @@ class DNSParser(BodyParser):
         self.answers_rss = bytes_to_uint(raw_bytes, self.byte_order)
 
     def parse_queries(self):
-        """ непонятно, как выяснить длину одного запроса """
-
+        pos = 12
         for I in range(0, self.questions):
-            raw_query = self.data[12:43]
-            name = raw_query[:-4]
-            tpe = raw_query[-4:-2]
-            cls = raw_query[-2:]
-            self.queries.append({'name': name, 'type': tpe, 'class': cls})
+            name, pos = read_til_zero(self.data, pos)
+            self.queries.append({
+                'name': bytes_to_string(name),
+                'type': self.data[pos:pos+2],
+                'class': self.data[pos+2:pos+4],
+            })
+            pos += 4
+        return pos
 
-    def parse_answers(self):
-        """ непонятно, как выяснить длину одного ответа """
-
+    def parse_answers(self, start_pos):
+        pos = start_pos
         for I in range(0, self.answers_rss):
-            raw_query = self.data[12:43]
-            name = raw_query[:-14]
-            tpe = raw_query[-14:-12]
-            cls = raw_query[-12:-10]
-            address = raw_query[-4:]
-            self.queries.append({'name': name, 'type': tpe, 'class': cls, 'addr': address})
+            raw_data_length = self.data[pos+10:pos+12]
+            data_length = bytes_to_uint(raw_data_length, self.byte_order)
+            answer_length = 12 + data_length
+
+            self.answers.append({
+                'name': self.data[pos:pos+2],
+                'type': self.data[pos+2:pos+4],
+                'class': self.data[pos+4:pos+6],
+                'time_to_live': self.data[pos+6:pos+10],
+                'data': self.data[pos+12:pos+answer_length],
+            })
+            pos += answer_length
+        return pos
 
     def parse(self):
         super().parse()
@@ -544,8 +553,9 @@ class DNSParser(BodyParser):
         self.parse_flags()
         self.parse_questions()
         self.parse_answers_rss()
-        self.parse_queries()
-        self.parse_answers()
+
+        end_queries_pos = self.parse_queries()
+        end_answers_pos = self.parse_answers(end_queries_pos)
         self.processed = self.packet_size
 
     def next_parser(self):
