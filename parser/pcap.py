@@ -255,7 +255,7 @@ class PCapBodyParser(Parser):
 
         while length > 0:
             parser.parse()
-            print(parser.processed)
+            # print(parser.processed)
             length -= parser.processed
 
             parser = parser.next_parser()
@@ -408,7 +408,6 @@ class TCPParser(BodyParser):
             if self.length == FTP_HEADER_LENGTH:
                 return FtpParser(self.data[start:], packet_size, self.byte_order)
             return HttpParser(self.data[start:], packet_size, self.byte_order)
-
         else:
             return None
 
@@ -446,6 +445,9 @@ class UDPParser(BodyParser):
 
 
 class HttpParser(BodyParser):
+    current_file = ''
+    current_file_name = None
+
     def __init__(self, data, packet_size, byte_order):
         super().__init__(data, byte_order)
         self.packet_size = packet_size
@@ -479,6 +481,20 @@ class HttpParser(BodyParser):
         for I in range(body_start_num, len(lines)):
             self.body += lines[I]
 
+    def set_current_file_name(self):
+        current_name = self.starting_line.split(' ')[1]
+        if '?' in current_name:
+            current_name = current_name.split('?')[0]
+
+        if current_name.isnumeric():
+            return
+
+        if HttpParser.current_file_name is not None and HttpParser.current_file_name != current_name:
+            # save_file(HttpParser.current_file_name, HttpParser.current_file)
+            # self.current_file = ''
+            pass
+        HttpParser.current_file_name = current_name
+
     def parse(self):
         super().parse()
         char_data = bytes_to_string(self.data[:self.packet_size])
@@ -487,17 +503,19 @@ class HttpParser(BodyParser):
         if len(lines) > 0:
             parsed = self.parse_starting_line(lines[0])
             if parsed:
+                self.set_current_file_name()
                 empty_str_index = self.parse_headers(lines)
                 self.parse_body(empty_str_index + 1, lines)
             else:
                 self.parse_body(0, lines)
+
             self.processed = self.packet_size
+            HttpParser.current_file += self.body
         else:
             raise InvalidHttpFormat()
 
     def next_parser(self):
         return None
-
 
 
 class DNSParser(BodyParser):
@@ -632,7 +650,7 @@ class FtpParser(BodyParser):
         if self.is_code_type(FTP_TRANSFER_COMPLETE):
             FtpParser.current_file_name = None
         if FtpParser.current_file_name is not None:
-                FtpParser.files[FtpParser.current_file_name] += self.data
+            FtpParser.files[FtpParser.current_file_name] += self.data
         elif self.is_code_type(FTP_TRANSFER_START):
             self.set_current_file_name()
 
