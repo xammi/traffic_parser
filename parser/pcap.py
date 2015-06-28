@@ -1,9 +1,12 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
-from utils import LE, BE, bytes_to_uint, bytes_to_string, read_til_zero
+from utils import LE, BE, bytes_to_uint, bytes_to_string, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE, \
+    FTP_TRANSFER_START, read_til_zero
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
     ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
+import re
+
 
 __author__ = 'max'
 
@@ -399,9 +402,12 @@ class TCPParser(BodyParser):
 
     def next_parser(self):
         start = self.processed
-        http_packet_size = self.packet_size - self.length
-        if http_packet_size > 0:
-            return HttpParser(self.data[start:], http_packet_size, self.byte_order)
+        packet_size = self.packet_size - self.length
+        if packet_size > 0:
+            if self.length == FTP_HEADER_LENGTH:
+                return FtpParser(self.data[start:], packet_size, self.byte_order)
+            return HttpParser(self.data[start:], packet_size, self.byte_order)
+
         else:
             return None
 
@@ -490,6 +496,7 @@ class HttpParser(BodyParser):
 
     def next_parser(self):
         return None
+
 
 
 class DNSParser(BodyParser):
@@ -590,6 +597,43 @@ class POP3Parser(BodyParser):
 
     def parse(self):
         super().parse()
+
+    def next_parser(self):
+        return None
+
+
+class FtpParser(BodyParser):
+
+    files = {}
+    current_file_name = None
+
+    def __init__(self, data, packet_size, byte_order):
+        super().__init__(data, byte_order)
+
+    def is_code_type(self, code):
+        try:
+            code_type = bytes_to_string(self.data[0:3])
+            return True if code_type == code else False
+        except PCapException as e:
+            print(e.__str__())
+
+    def set_current_file_name(self):
+        response = bytes_to_string(self.data)
+        r = re.compile('for (.*?) \(')
+        m = r.search(response)
+        if m:
+            FtpParser.current_file_name = m.group(1)
+            FtpParser.files[FtpParser.current_file_name] = b""
+
+    def parse(self):
+        super().parse()
+        self.processed = FTP_HEADER_LENGTH
+        if self.is_code_type(FTP_TRANSFER_COMPLETE):
+            FtpParser.current_file_name = None
+        if FtpParser.current_file_name is not None:
+                FtpParser.files[FtpParser.current_file_name] += self.data
+        elif self.is_code_type(FTP_TRANSFER_START):
+            self.set_current_file_name()
 
     def next_parser(self):
         return None
