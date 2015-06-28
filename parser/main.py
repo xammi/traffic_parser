@@ -25,6 +25,6 @@ def parse_file(path):
     p_cap.close()
 
 if __name__ == "__main__":
-    parse_file("/home/max/workspace/git/traffic_parser/samples/ftp3.pcap")
+    parse_file("/home/max/workspace/git/traffic_parser/samples/ftp2.pcap")
 
 

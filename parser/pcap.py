@@ -654,11 +654,15 @@ class FtpParser(BodyParser):
     def is_code_type(self, code):
         try:
             code_type = bytes_to_string(self.data[0:3])
+            if code_type == FTP_TRANSFER_COMPLETE:
+                pass
             return True if code_type == code else False
         except PCapException as e:
             print(e.__str__())
 
     def set_current_file_name(self):
+        if b'\r' in self.data:
+            self.data = self.data[:self.data.index(b'\r')]
         response = bytes_to_string(self.data)
         r = re.compile('for (.*?) \(')
         m = r.search(response)
