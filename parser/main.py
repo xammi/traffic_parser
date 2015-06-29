@@ -3,7 +3,7 @@
 
 from constants import SRC_PATH
 from pcap import PCapFile, PCapParser, HTTPParser
-from utils import save_file
+from utils import save_file, form_path
 
 __author__ = 'max'
 
@@ -20,16 +20,18 @@ def parse_file(path):
     # analyzer = FramesAnalyzer(frames)
     # analyzer.analyze()
 
-    # TODO: kostyl, use analyzer
-    if HTTPParser.current_file_name is not None:
-        save_file(HTTPParser.current_file_name, HTTPParser.current_file)
-    # TODO: end kostyl
-
     print('Successfully parsed\n')
     p_cap.close()
 
 if __name__ == "__main__":
     parse_file(SRC_PATH + 'http.cap')
+
+    # TODO: kostyl, use analyzer
+    if HTTPParser.current_file_name is not None:
+        fullpath = form_path(HTTPParser.current_src_ip, HTTPParser.current_dest_ip, HTTPParser.current_file_name)
+        save_file(fullpath, HTTPParser.current_file)
+    # TODO: end kostyl
+
     parse_file(SRC_PATH + 'ftp2.pcap')
     parse_file(SRC_PATH + 'smtp.pcap')
 

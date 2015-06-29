@@ -42,15 +42,23 @@ def read_til(data, start, end_seq):
     return data[start:pos], pos + end_len
 
 
+def ip_to_string(bytes_ip):
+    return '%d.%d.%d.%d' % (bytes_ip[0], bytes_ip[1], bytes_ip[2], bytes_ip[3])
+
+
+def form_path(source_ip, dest_ip, path):
+    sip = ip_to_string(source_ip)
+    dip = ip_to_string(dest_ip)
+    prefix = SAVE_PATH.strip('/')
+    trimmed_path = path.strip('/')
+    return '/%s/%s/%s/%s' % (prefix, sip, dip, trimmed_path)
+
+
 def save_file(path, data, buffered=False):
-    path, name = os.path.split(path)
-    if path != '/':
-        path = SAVE_PATH + path + '/'
-    else:
-        path = SAVE_PATH
+    dirs_path, name = os.path.split(path)
 
     try:
-        os.makedirs(path)
+        os.makedirs(dirs_path)
     except OSError as e:
         if e.errno == errno.EEXIST:
             pass
@@ -58,6 +66,6 @@ def save_file(path, data, buffered=False):
             raise
 
     if not buffered:
-        open(path + name, 'w').write(data)
+        open(path, 'w').write(data)
     else:
-        open(path + name, 'wb').write(data)
+        open(path, 'wb').write(data)
