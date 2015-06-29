@@ -427,7 +427,7 @@ class TCPParser(BodyParser):
             return HTTPParser(*parameters)
         elif self.source_port in SMTP_PORTS or self.destination_port in SMTP_PORTS:
             return SMTPParser(*parameters)
-        elif self.source_port in POP3_PORTS or self.destination_port in POP3_PORTS:
+        elif self.source_port in POP3_PORTS:
             return POP3Parser(*parameters)
         else:
             return FTPParser(*parameters)
@@ -739,18 +739,20 @@ class POP3Parser(BodyParser):
         if m:
             POP3Parser.subject = m.group(1)
 
+    def create_letter(self):
+        new_line = '\r\n'
+        return 'Sender: ' + self.sender + new_line + 'Receiver: ' + self.receiver + new_line \
+            + 'Date: ' + self.date + new_line + 'Subject: ' + self.subject + new_line + bytes_to_string(self.message)
+
     def parse(self):
         super().parse()
         self.processed = self.packet_size
         if self.sender is not None:
             if self.is_end_message():
-                self.message += self.data
-                print(self.sender)
-                print(self.receiver)
-                print(self.date)
-                print(self.subject)
-                print(self.message)
-                print("_________")
+                POP3Parser.message += self.data
+                file_name = self.sender + " " + self.subject + " " + self.date
+                fullpath = form_path(self.source_ip, self.destination_ip, file_name)
+                save_file(fullpath, self.create_letter())
                 self.sender = None
             else:
                 POP3Parser.message += self.data
@@ -759,14 +761,13 @@ class POP3Parser(BodyParser):
             self.parse_receiver()
             self.parse_date()
             self.parse_subject()
-            delimiter = b'Encoding: quoted-printable:'
-            if delimiter in self.data:
-                self.data = self.data[self.data.index(delimiter):]
-            delimiter = b'\r\n\r\n'
-            if delimiter in self.data:
-                self.data = self.data[self.data.index(delimiter):]
+            self.slice_data(b'Encoding: quoted-printable:')
+            self.slice_data(b'\r\n\r\n')
             POP3Parser.message = self.data
-            pass
+
+    def slice_data(self, delimiter):
+        if delimiter in self.data:
+            self.data = self.data[self.data.index(delimiter):]
 
     def next_parser(self):
         return None
@@ -786,8 +787,6 @@ class FTPParser(BodyParser):
     def is_code_type(self, code):
         try:
             code_type = bytes_to_string(self.data[0:3])
-            if code_type == FTP_TRANSFER_COMPLETE:
-                pass
             return True if code_type == code else False
         except PCapException as e:
             if DEBUG:

@@ -34,5 +34,6 @@ if __name__ == "__main__":
 
     parse_file(SRC_PATH + 'ftp2.pcap')
     parse_file(SRC_PATH + 'smtp.pcap')
+    parse_file(SRC_PATH + 'pop3.pcap')
 
 
