@@ -2,10 +2,10 @@
 # encoding: utf-8
 
 from constants import HTTP_PORTS, SMTP_PORTS, LE, BE, FTP_HEADER_LENGTH, FTP_TRANSFER_COMPLETE,\
-    FTP_TRANSFER_START
+    FTP_TRANSFER_START, DEBUG
 from utils import bytes_to_uint, bytes_to_string, read_til, read_til_zero, save_file
 from exceptions import PCapException, FormatException, SecondMethodInvoke, PhInterfaceNotImplemented, \
-    ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat, NotUnicode
+    ProtocolNotImplemented, InvalidFieldValue, InvalidHttpFormat
 import re
 
 
@@ -256,7 +256,8 @@ class PCapBodyParser(Parser):
 
         while length > 0:
             parser.parse()
-            # print(parser.processed)
+            if DEBUG:
+                print(parser.processed)
             length -= parser.processed
 
             parser = parser.next_parser()
@@ -269,7 +270,7 @@ class PCapBodyParser(Parser):
     def parse(self):
         super().parse()
         length = self.forward_parse()
-        if length > 0:
+        if length > 0 and DEBUG:
             print('Not parsed %d bytes' % length)
 
 
@@ -353,7 +354,7 @@ class IPParser(BodyParser):
         start = self.processed
         if self.protocol == 6:
             tcp_packet_size = self.total - self.length
-            return TCPParser(self.data[start:], tcp_packet_size, self.byte_order)
+            return TCPParser(self.data[start:], tcp_packet_size, self.source, self.destination, self.byte_order)
         elif self.protocol == 17:
             return UDPParser(self.data[start:], self.byte_order)
         else:
@@ -361,9 +362,12 @@ class IPParser(BodyParser):
 
 
 class TCPParser(BodyParser):
-    def __init__(self, data, packet_size, byte_order):
+    def __init__(self, data, packet_size, source_ip, destination_ip, byte_order):
         super().__init__(data, byte_order)
         self.packet_size = packet_size
+        self.source_ip = source_ip
+        self.destination_ip = destination_ip
+
         self.length = None
         self.flags = None
         self.seq_num = None
@@ -708,7 +712,8 @@ class FtpParser(BodyParser):
                 pass
             return True if code_type == code else False
         except PCapException as e:
-            print(e.__str__())
+            if DEBUG:
+                print(e.__str__())
 
     def set_current_file_name(self):
         if b'\r' in self.data:
@@ -767,10 +772,12 @@ class PCapParser(Parser):
                     break
 
                 frames += [frame]
-                print('Frame number %d parsed' % counter)
+                if DEBUG:
+                    print('Frame number %d parsed' % counter)
                 counter += 1
 
             except PCapException as e:
-                print(e.__str__())
+                if DEBUG:
+                    print(e.__str__())
 
         return global_header_parser, frames
